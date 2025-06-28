@@ -4,49 +4,48 @@ name: Monthly YouTube Premium Reminder
 
 on:
   schedule:
-    # This runs at 05:00 UTC on the 4th day of every month.
-    # You can adjust the time if you want.
+    # Reminder 1: Early Heads-Up - Har mahine ki 1 tareekh ko subah 10:30 AM IST (05:00 UTC)
+    - cron: '0 5 1 * *' 
+    # Reminder 2: Day Before Due - Har mahine ki 4 tareekh ko subah 10:30 AM IST (05:00 UTC)
     - cron: '0 5 4 * *'
+    # Reminder 3: Due Date - Har mahine ki 5 tareekh ko subah 10:30 AM IST (05:00 UTC)
+    - cron: '0 5 5 * *'
+    # Reminder 4: Renewal Day - Har mahine ki 8 tareekh ko raat 10:00 PM IST (16:30 UTC)
+    - cron: '30 16 8 * *'
   
-  # This line allows you to trigger the workflow manually from the Actions tab on GitHub.
-  workflow_dispatch:
+  workflow_dispatch: # Manually trigger karne ke liye
 
 jobs:
-  send_telegram_message:
+  # Job for 1st of the month: Early Heads-Up
+  send_telegram_reminder_1st:
     runs-on: ubuntu-latest
+    # Sirf tab chalega jab schedule 1st ko trigger ho ya manually run karein
+    if: github.event.schedule == '0 5 1 * *' || github.event_name == 'workflow_dispatch'
     steps:
-      # Step 1: Get the current month and year dynamically.
+      - name: Check out repository code
+        uses: actions/checkout@v4
+
       - name: Get current month and year
         id: date
         run: |
           echo "MONTH=$(date +'%B')" >> $GITHUB_ENV
           echo "YEAR=$(date +'%Y')" >> $GITHUB_ENV
 
-      # Step 2: Use a pre-built action to send the message to your Telegram chat.
-      - name: Send Telegram Reminder
-        # You can find this action on the GitHub Marketplace
+      - name: Send Early Reminder (1st of Month)
         uses: appleboy/telegram-action@master
         with:
-          # These are secrets you need to set in your GitHub repository settings.
           to: ${{ secrets.TELEGRAM_TO }}
           token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          
-          # This is the message template.
-          # It uses the MONTH and YEAR variables we created in the first step.
           message: |
-            Reminder: YouTube Premium Payment – Due by ${{ env.MONTH }} 5, ${{ env.YEAR }}
+            🔔 *YouTube Premium: Payment Reminder* 🔔
 
-            Dear YouTube Premium Family Members,
+            Hello Team,
 
-            This is a kind reminder to pay ₹50 by ${{ env.MONTH }} 5, ${{ env.YEAR }} for the upcoming YouTube Premium Family Plan renewal on ${{ env.MONTH }} 8, ${{ env.YEAR }}.
+            Quick heads-up! Your **₹50 contribution** for YouTube Premium is due by **${{ env.MONTH }} 5, ${{ env.YEAR }}**. Renewal on **${{ env.MONTH }} 8, ${{ env.YEAR }}**.
 
-            Timely payment ensures you continue enjoying all premium features like:
-            ✅ Ad-free videos
-            ✅ Background play
-            ✅ YouTube Music Premium
+            *Please ignore if paid. Thanks!* 🙏
 
-            Updated Members List:
-
+            Current Members:
             1. Amit
             2. Alan D'Souza
             3. Mourya Baruah
@@ -54,5 +53,147 @@ jobs:
             5. Slot 5 – Managed by Me
             6. Slot 6 – Managed by Me
 
-            Please confirm once payment is done.
-            Thank you and happy streaming! 🎧📺
+            Happy streaming! 📺🎶
+
+      - name: Send QR Code for Payment (1st)
+        uses: appleboy/telegram-action@master
+        with:
+          to: ${{ secrets.TELEGRAM_TO }}
+          token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          photo: ./.github/workflows/QRcode.png
+          message: |
+            QR code for payment: 💳
+
+  # Job for 4th of the month: Day Before Due Date
+  send_telegram_reminder_4th:
+    runs-on: ubuntu-latest
+    # Sirf tab chalega jab schedule 4th ko trigger ho ya manually run karein
+    if: github.event.schedule == '0 5 4 * *' || github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4
+
+      - name: Get current month and year
+        id: date
+        run: |
+          echo "MONTH=$(date +'%B')" >> $GITHUB_ENV
+          echo "YEAR=$(date +'%Y')" >> $GITHUB_ENV
+
+      - name: Send Day Before Reminder (4th of Month)
+        uses: appleboy/telegram-action@master
+        with:
+          to: ${{ secrets.TELEGRAM_TO }}
+          token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          message: |
+            ⚠️ *YouTube Premium: Payment Due TOMORROW!* ⚠️
+
+            Hi everyone,
+
+            Reminder: **₹50** for YouTube Premium is due **tomorrow, ${{ env.MONTH }} 5, ${{ env.YEAR }}**. Plan renews **${{ env.MONTH }} 8, ${{ env.YEAR }}**.
+
+            Please pay soon for uninterrupted service! 🏃‍♂️
+            *Ignore if already paid. Thank you!* 🙏
+
+            Current Members:
+            1. Amit
+            2. Alan D'Souza
+            3. Mourya Baruah
+            4. Abhishek Kumar
+            5. Slot 5 – Managed by Me
+            6. Slot 6 – Managed by Me
+
+      - name: Send QR Code for Payment (4th)
+        uses: appleboy/telegram-action@master
+        with:
+          to: ${{ secrets.TELEGRAM_TO }}
+          token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          photo: ./.github/workflows/QRcode.png
+          message: |
+            QR code for payment: 💳
+
+  # Job for 5th of the month: DUE DATE!
+  send_telegram_reminder_5th:
+    runs-on: ubuntu-latest
+    # Sirf tab chalega jab schedule 5th ko trigger ho ya manually run karein
+    if: github.event.schedule == '0 5 5 * *' || github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4
+
+      - name: Get current month and year
+        id: date
+        run: |
+          echo "MONTH=$(date +'%B')" >> $GITHUB_ENV
+          echo "YEAR=$(date +'%Y')" >> $GITHUB_ENV
+
+      - name: Send Due Date Reminder (5th of Month)
+        uses: appleboy/telegram-action@master
+        with:
+          to: ${{ secrets.TELEGRAM_TO }}
+          token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          message: |
+            🚨 **ACTION REQUIRED: YouTube Premium Payment Due TODAY!** 🚨
+
+            Team, urgent reminder! 🔥 Today, **${{ env.MONTH }} 5, ${{ env.YEAR }}**, is the *final day* for your **₹50 contribution** for YouTube Premium. Plan renews **${{ env.MONTH }} 8, ${{ env.YEAR }}**.
+
+            Please pay *immediately* to avoid service disruption! 🛑
+            *Ignore if already paid. Thank you for your promptness!* 🙏
+
+            Current Members:
+            1. Amit
+            2. Alan D'Souza
+            3. Mourya Baruah
+            4. Abhishek Kumar
+            5. Slot 5 – Managed by Me
+            6. Slot 6 – Managed by Me
+
+      - name: Send QR Code for Payment (5th)
+        uses: appleboy/telegram-action@master
+        with:
+          to: ${{ secrets.TELEGRAM_TO }}
+          token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          photo: ./.github/workflows/QRcode.png
+          message: |
+            QR code for immediate payment: 💳
+
+  # Job for 8th of the month: Renewal Day (Night)
+  send_telegram_reminder_8th:
+    runs-on: ubuntu-latest
+    # Sirf tab chalega jab schedule 8th ko trigger ho ya manually run karein
+    if: github.event.schedule == '30 16 8 * *' || github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4
+
+      - name: Get current month and year
+        id: date
+        run: |
+          echo "MONTH=$(date +'%B')" >> $GITHUB_ENV
+          echo "YEAR=$(date +'%Y')" >> $GITHUB_ENV
+
+      - name: Send Renewal Confirmation (8th of Month)
+        uses: appleboy/telegram-action@master
+        with:
+          to: ${{ secrets.TELEGRAM_TO }}
+          token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          message: |
+            🎉 **YouTube Premium: Renewal Successful!** 🎉
+
+            Dear Team,
+
+            Great news! Your YouTube Premium family plan has been **successfully renewed** for **${{ env.MONTH }}, ${{ env.YEAR }}**! ✨
+
+            Enjoy: ✅ Ad-free videos 🚫 ✅ Background play 🎧 ✅ YouTube Music Premium 🎶
+
+            *Just a quick note: Please ensure your ₹50 contribution for this month has been completed. If not, kindly do so at your earliest convenience.* 🙏
+
+            Current Members:
+            1. Amit
+            2. Alan D'Souza
+            3. Mourya Baruah
+            4. Abhishek Kumar
+            5. Slot 5 – Managed by Me
+            6. Slot 6 – Managed by Me
+
+            Thanks for your contributions! Enjoy! 🥳
+
