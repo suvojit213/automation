@@ -1,0 +1,58 @@
+# .github/workflows/telegram-reminder.yml
+
+name: Monthly YouTube Premium Reminder
+
+on:
+  schedule:
+    # This runs at 00:00 UTC on the 4th day of every month.
+    # You can adjust the time if you want.
+    - cron: '0 0 4 * *'
+  
+  # This line allows you to trigger the workflow manually from the Actions tab on GitHub.
+  workflow_dispatch:
+
+jobs:
+  send_telegram_message:
+    runs-on: ubuntu-latest
+    steps:
+      # Step 1: Get the current month and year dynamically.
+      - name: Get current month and year
+        id: date
+        run: |
+          echo "MONTH=$(date +'%B')" >> $GITHUB_ENV
+          echo "YEAR=$(date +'%Y')" >> $GITHUB_ENV
+
+      # Step 2: Use a pre-built action to send the message to your Telegram chat.
+      - name: Send Telegram Reminder
+        # You can find this action on the GitHub Marketplace
+        uses: appleboy/telegram-action@master
+        with:
+          # These are secrets you need to set in your GitHub repository settings.
+          to: ${{ secrets.TELEGRAM_TO }}
+          token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          
+          # This is the message template.
+          # It uses the MONTH and YEAR variables we created in the first step.
+          message: |
+            Reminder: YouTube Premium Payment – Due by ${{ env.MONTH }} 5, ${{ env.YEAR }}
+
+            Dear YouTube Premium Family Members,
+
+            This is a kind reminder to pay ₹50 by ${{ env.MONTH }} 5, ${{ env.YEAR }} for the upcoming YouTube Premium Family Plan renewal on ${{ env.MONTH }} 8, ${{ env.YEAR }}.
+
+            Timely payment ensures you continue enjoying all premium features like:
+            ✅ Ad-free videos
+            ✅ Background play
+            ✅ YouTube Music Premium
+
+            Updated Members List:
+
+            1. Amit
+            2. Alan D'Souza
+            3. Mourya Baruah
+            4. Abhishek Kumar
+            5. Slot 5 – Managed by Me
+            6. Slot 6 – Managed by Me
+
+            Please confirm once payment is done.
+            Thank you and happy streaming! 🎧📺
