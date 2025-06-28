@@ -4,9 +4,9 @@ name: Monthly YouTube Premium Reminder
 
 on:
   schedule:
-    # This runs at 00:00 UTC on the 4th day of every month.
+    # This runs at 05:00 UTC on the 4th day of every month.
     # You can adjust the time if you want.
-    - cron: '0 0 4 * *'
+    - cron: '0 5 4 * *'
   
   # This line allows you to trigger the workflow manually from the Actions tab on GitHub.
   workflow_dispatch:
