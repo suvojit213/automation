@@ -1,9 +1,16 @@
 # .github/workflows/telegram-reminder.yml
+# -----------------------------------------------------------------------------
+# Monthly YouTube Premium Reminder Workflow
+# Purpose: To send automated, professional, yet friendly reminders to YouTube
+# Premium family members about their monthly contribution and plan renewal.
+# Includes automatic pinning of reminder messages with notifications.
+# -----------------------------------------------------------------------------
 
 name: Monthly YouTube Premium Reminder
 
 on:
   schedule:
+    # 🗓️ Reminder Schedule (All times in IST - Indian Standard Time)
     # Reminder 1: Early Heads-Up - Har mahine ki 1 tareekh ko subah 10:30 AM IST (05:00 UTC)
     - cron: '0 5 1 * *' 
     # Reminder 2: Day Before Due - Har mahine ki 4 tareekh ko subah 10:30 AM IST (05:00 UTC)
@@ -13,181 +20,253 @@ on:
     # Reminder 4: Renewal Day - Har mahine ki 8 tareekh ko raat 10:00 PM IST (16:30 UTC)
     - cron: '30 16 8 * *'
   
-  workflow_dispatch: # Manually trigger karne ke liye
+  # Manually trigger karne ke liye
+  workflow_dispatch:
 
+# -----------------------------------------------------------------------------
+# JOBS SECTION: Different notifications for different days
+# -----------------------------------------------------------------------------
 jobs:
-  # Job for 1st of the month: Early Heads-Up
+  # 📅 Job 1: Early Heads-Up (1st of the month) - Includes Loud Pinning
   send_telegram_reminder_1st:
     runs-on: ubuntu-latest
-    # Sirf tab chalega jab schedule 1st ko trigger ho ya manually run karein
     if: github.event.schedule == '0 5 1 * *' || github.event_name == 'workflow_dispatch'
     steps:
-      - name: Check out repository code
+      - name: ⬇️ Check out repository code
         uses: actions/checkout@v4
 
-      - name: Get current month and year
+      - name: 📦 Install JQ for JSON parsing
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: 🗓️ Get current month and year
         id: date
         run: |
           echo "MONTH=$(date +'%B')" >> $GITHUB_ENV
           echo "YEAR=$(date +'%Y')" >> $GITHUB_ENV
 
-      - name: Send Early Reminder (1st of Month)
-        uses: appleboy/telegram-action@master
-        with:
-          to: ${{ secrets.TELEGRAM_TO }}
-          token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          message: |
-            🔔 *YouTube Premium: Payment Reminder* 🔔
+      - name: ✉️ Send Early Reminder Message & Capture ID
+        id: send_message_1
+        run: |
+          # Message content
+          MESSAGE="🔔 YouTube Premium: Monthly Contribution Reminder 🔔
 
-            Hello Team,
+          Dear Team,
 
-            Quick heads-up! Your **₹50 contribution** for YouTube Premium is due by **${{ env.MONTH }} 5, ${{ env.YEAR }}**. Renewal on **${{ env.MONTH }} 8, ${{ env.YEAR }}**.
+          This is a friendly heads-up regarding your upcoming ₹50 contribution for the YouTube Premium family plan. The payment is due by ${{ env.MONTH }} 5, ${{ env.YEAR }}, with renewal on ${{ env.MONTH }} 8, ${{ env.YEAR }}.
 
-            *Please ignore if paid. Thanks!* 🙏
+          Please ignore this message if you have already made your payment. Your cooperation is much appreciated! 🙏
 
-            Current Members:
-            1. Amit
-            2. Alan D'Souza
-            3. Mourya Baruah
-            4. Abhishek Kumar
-            5. Slot 5 – Managed by Me
-            6. Slot 6 – Managed by Me
+          Current Members:
+          1. Amit
+          2. Alan D'Souza
+          3. Mourya Baruah
+          4. Abhishek Kumar
+          5. Slot 5 – Managed by Me
+          6. Slot 6 – Managed by Me
 
-            Happy streaming! 📺🎶
+          Happy streaming! 📺🎶"
 
-      - name: Send QR Code for Payment (1st)
+          # Use curl to send message and capture response
+          RESPONSE=$(curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+            -d "chat_id=${{ secrets.TELEGRAM_TO }}" \
+            -d "text=${MESSAGE}" \
+            -d "parse_mode=HTML" # Using HTML for consistent rendering
+          )
+          
+          # Extract message_id using jq
+          MESSAGE_ID=$(echo "$RESPONSE" | jq -r '.result.message_id')
+          
+          # Store message_id in GitHub Actions output for next step
+          echo "::set-output name=message_id::$MESSAGE_ID"
+          echo "Sent message with ID: $MESSAGE_ID" # For debugging
+
+      - name: 📌 Pin the Early Reminder Message (LOUD)
+        if: steps.send_message_1.outputs.message_id != '' # Only try to pin if message was sent successfully
+        run: |
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/pinChatMessage" \
+            -d "chat_id=${{ secrets.TELEGRAM_TO }}" \
+            -d "message_id=${{ steps.send_message_1.outputs.message_id }}" \
+            # Removed disable_notification=true for loud pinning
+        env:
+          MESSAGE_ID: ${{ steps.send_message_1.outputs.message_id }}
+
+      - name: 📸 Send QR Code for Payment (1st)
         uses: appleboy/telegram-action@master
         with:
           to: ${{ secrets.TELEGRAM_TO }}
           token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           photo: ./.github/workflows/QRcode.png
           message: |
-            QR code for payment: 💳
+            Here's the QR code for your convenience: 💳
 
-  # Job for 4th of the month: Day Before Due Date
+  # 🗓️ Job 2: Day Before Due Date (4th of the month) - Includes Loud Pinning
   send_telegram_reminder_4th:
     runs-on: ubuntu-latest
-    # Sirf tab chalega jab schedule 4th ko trigger ho ya manually run karein
     if: github.event.schedule == '0 5 4 * *' || github.event_name == 'workflow_dispatch'
     steps:
-      - name: Check out repository code
+      - name: ⬇️ Check out repository code
         uses: actions/checkout@v4
 
-      - name: Get current month and year
+      - name: 📦 Install JQ for JSON parsing
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: 🗓️ Get current month and year
         id: date
         run: |
           echo "MONTH=$(date +'%B')" >> $GITHUB_ENV
           echo "YEAR=$(date +'%Y')" >> $GITHUB_ENV
 
-      - name: Send Day Before Reminder (4th of Month)
-        uses: appleboy/telegram-action@master
-        with:
-          to: ${{ secrets.TELEGRAM_TO }}
-          token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          message: |
-            ⚠️ *YouTube Premium: Payment Due TOMORROW!* ⚠️
+      - name: ✉️ Send Day Before Due Reminder Message & Capture ID
+        id: send_message_4
+        run: |
+          # Message content
+          MESSAGE="⚠️ YouTube Premium: Payment Due Tomorrow! ⚠️
 
-            Hi everyone,
+          Hello everyone,
 
-            Reminder: **₹50** for YouTube Premium is due **tomorrow, ${{ env.MONTH }} 5, ${{ env.YEAR }}**. Plan renews **${{ env.MONTH }} 8, ${{ env.YEAR }}**.
+          Just a gentle reminder: your ₹50 contribution for YouTube Premium is due tomorrow, ${{ env.MONTH }} 5, ${{ env.YEAR }}. The plan will renew on ${{ env.MONTH }} 8, ${{ env.YEAR }}.
 
-            Please pay soon for uninterrupted service! 🏃‍♂️
-            *Ignore if already paid. Thank you!* 🙏
+          Please ensure your payment is made soon to enjoy uninterrupted service! 🏃‍♂️
+          Kindly disregard this message if you have already submitted your payment. Thank you! 🙏
 
-            Current Members:
-            1. Amit
-            2. Alan D'Souza
-            3. Mourya Baruah
-            4. Abhishek Kumar
-            5. Slot 5 – Managed by Me
-            6. Slot 6 – Managed by Me
+          Current Members:
+          1. Amit
+          2. Alan D'Souza
+          3. Mourya Baruah
+          4. Abhishek Kumar
+          5. Slot 5 – Managed by Me
+          6. Slot 6 – Managed by Me"
 
-      - name: Send QR Code for Payment (4th)
+          RESPONSE=$(curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+            -d "chat_id=${{ secrets.TELEGRAM_TO }}" \
+            -d "text=${MESSAGE}" \
+            -d "parse_mode=HTML" # Using HTML for consistent rendering
+          )
+          
+          MESSAGE_ID=$(echo "$RESPONSE" | jq -r '.result.message_id')
+          echo "::set-output name=message_id::$MESSAGE_ID"
+          echo "Sent message with ID: $MESSAGE_ID"
+
+      - name: 📌 Pin the Day Before Due Reminder Message (LOUD)
+        if: steps.send_message_4.outputs.message_id != ''
+        run: |
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/pinChatMessage" \
+            -d "chat_id=${{ secrets.TELEGRAM_TO }}" \
+            -d "message_id=${{ steps.send_message_4.outputs.message_id }}" \
+            # Removed disable_notification=true for loud pinning
+        env:
+          MESSAGE_ID: ${{ steps.send_message_4.outputs.message_id }}
+
+      - name: 📸 Send QR Code for Payment (4th)
         uses: appleboy/telegram-action@master
         with:
           to: ${{ secrets.TELEGRAM_TO }}
           token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           photo: ./.github/workflows/QRcode.png
           message: |
-            QR code for payment: 💳
+            Here's the QR code for your convenience: 💳
 
-  # Job for 5th of the month: DUE DATE!
+  # 🗓️ Job 3: DUE DATE! (5th of the month) - Includes Loud Pinning
   send_telegram_reminder_5th:
     runs-on: ubuntu-latest
-    # Sirf tab chalega jab schedule 5th ko trigger ho ya manually run karein
     if: github.event.schedule == '0 5 5 * *' || github.event_name == 'workflow_dispatch'
     steps:
-      - name: Check out repository code
+      - name: ⬇️ Check out repository code
         uses: actions/checkout@v4
 
-      - name: Get current month and year
+      - name: 📦 Install JQ for JSON parsing
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: 🗓️ Get current month and year
         id: date
         run: |
           echo "MONTH=$(date +'%B')" >> $GITHUB_ENV
           echo "YEAR=$(date +'%Y')" >> $GITHUB_ENV
 
-      - name: Send Due Date Reminder (5th of Month)
-        uses: appleboy/telegram-action@master
-        with:
-          to: ${{ secrets.TELEGRAM_TO }}
-          token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          message: |
-            🚨 **ACTION REQUIRED: YouTube Premium Payment Due TODAY!** 🚨
+      - name: ✉️ Send Due Date Reminder Message & Capture ID
+        id: send_message_5
+        run: |
+          # Message content
+          MESSAGE="🚨 ACTION REQUIRED: YouTube Premium Payment Due TODAY! 🚨
 
-            Team, urgent reminder! 🔥 Today, **${{ env.MONTH }} 5, ${{ env.YEAR }}**, is the *final day* for your **₹50 contribution** for YouTube Premium. Plan renews **${{ env.MONTH }} 8, ${{ env.YEAR }}**.
+          Dear Team,
 
-            Please pay *immediately* to avoid service disruption! 🛑
-            *Ignore if already paid. Thank you for your promptness!* 🙏
+          This is an urgent reminder that today, ${{ env.MONTH }} 5, ${{ env.YEAR }}, is the final day to make your ₹50 contribution for YouTube Premium. The plan renews on ${{ env.MONTH }} 8, ${{ env.YEAR }}.
 
-            Current Members:
-            1. Amit
-            2. Alan D'Souza
-            3. Mourya Baruah
-            4. Abhishek Kumar
-            5. Slot 5 – Managed by Me
-            6. Slot 6 – Managed by Me
+          Please make your payment immediately to avoid any service disruption! 🛑
+          Kindly disregard this message if you have already submitted your payment. Your promptness is highly appreciated! 🙏
 
-      - name: Send QR Code for Payment (5th)
+          Current Members:
+          1. Amit
+          2. Alan D'Souza
+          3. Mourya Baruah
+          4. Abhishek Kumar
+          5. Slot 5 – Managed by Me
+          6. Slot 6 – Managed by Me"
+
+          RESPONSE=$(curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+            -d "chat_id=${{ secrets.TELEGRAM_TO }}" \
+            -d "text=${MESSAGE}" \
+            -d "parse_mode=HTML" # Using HTML for consistent rendering
+          )
+          
+          MESSAGE_ID=$(echo "$RESPONSE" | jq -r '.result.message_id')
+          echo "::set-output name=message_id::$MESSAGE_ID"
+          echo "Sent message with ID: $MESSAGE_ID"
+
+      - name: 📌 Pin the Due Date Reminder Message (LOUD)
+        if: steps.send_message_5.outputs.message_id != ''
+        run: |
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/pinChatMessage" \
+            -d "chat_id=${{ secrets.TELEGRAM_TO }}" \
+            -d "message_id=${{ steps.send_message_5.outputs.message_id }}" \
+            # Removed disable_notification=true for loud pinning
+        env:
+          MESSAGE_ID: ${{ steps.send_message_5.outputs.message_id }}
+
+      - name: 📸 Send QR Code for Payment (5th)
         uses: appleboy/telegram-action@master
         with:
           to: ${{ secrets.TELEGRAM_TO }}
           token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           photo: ./.github/workflows/QRcode.png
           message: |
-            QR code for immediate payment: 💳
+            Here's the QR code for immediate payment: 💳
 
-  # Job for 8th of the month: Renewal Day (Night)
+  # 🗓️ Job 4: Renewal Confirmation (8th of the month - Night) - No Pinning
   send_telegram_reminder_8th:
     runs-on: ubuntu-latest
-    # Sirf tab chalega jab schedule 8th ko trigger ho ya manually run karein
     if: github.event.schedule == '30 16 8 * *' || github.event_name == 'workflow_dispatch'
     steps:
-      - name: Check out repository code
+      - name: ⬇️ Check out repository code
         uses: actions/checkout@v4
 
-      - name: Get current month and year
+      - name: 🗓️ Get current month and year
         id: date
         run: |
           echo "MONTH=$(date +'%B')" >> $GITHUB_ENV
           echo "YEAR=$(date +'%Y')" >> $GITHUB_ENV
 
-      - name: Send Renewal Confirmation (8th of Month)
+      - name: ✉️ Send Renewal Confirmation
         uses: appleboy/telegram-action@master
         with:
           to: ${{ secrets.TELEGRAM_TO }}
           token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          parse_mode: html # Using HTML for consistent rendering
           message: |
-            🎉 **YouTube Premium: Renewal Successful!** 🎉
-
+            🎉 YouTube Premium: Renewal Successful! 🎉
             Dear Team,
 
-            Great news! Your YouTube Premium family plan has been **successfully renewed** for **${{ env.MONTH }}, ${{ env.YEAR }}**! ✨
+            Great news! Your YouTube Premium family plan has been successfully renewed for ${{ env.MONTH }}, ${{ env.YEAR }}! ✨
 
-            Enjoy: ✅ Ad-free videos 🚫 ✅ Background play 🎧 ✅ YouTube Music Premium 🎶
+            You can continue to enjoy all premium features:
+            ✅ Ad-free videos 🚫
+            ✅ Background play 🎧
+            ✅ YouTube Music Premium 🎶
 
-            *Just a quick note: Please ensure your ₹50 contribution for this month has been completed. If not, kindly do so at your earliest convenience.* 🙏
+            Just a quick note: Please ensure your ₹50 contribution for this month has been completed. If not, kindly do so at your earliest convenience. 🙏
 
-            Current Members:
+            <b>Current Members:</b>
             1. Amit
             2. Alan D'Souza
             3. Mourya Baruah
@@ -195,5 +274,34 @@ jobs:
             5. Slot 5 – Managed by Me
             6. Slot 6 – Managed by Me
 
-            Thanks for your contributions! Enjoy! 🥳
+            Thank you for your timely contributions! Enjoy! 🥳
+
+  # ❌ Job 5: Workflow Failure Notification
+  # This job runs only if any previous job in the workflow fails.
+  notify_on_failure:
+    runs-on: ubuntu-latest
+    needs: 
+      - send_telegram_reminder_1st
+      - send_telegram_reminder_4th
+      - send_telegram_reminder_5th
+      - send_telegram_reminder_8th
+    if: always() && (needs.send_telegram_reminder_1st.result == 'failure' || needs.send_telegram_reminder_4th.result == 'failure' || needs.send_telegram_reminder_5th.result == 'failure' || needs.send_telegram_reminder_8th.result == 'failure')
+    steps:
+      - name: ⬇️ Check out repository code
+        uses: actions/checkout@v4
+
+      - name: 🚨 Send Failure Notification to Telegram
+        uses: appleboy/telegram-action@master
+        with:
+          to: ${{ secrets.TELEGRAM_TO }}
+          token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          message: |
+            🚨 Workflow Alert: YouTube Premium Reminder Failed! 🚨
+            Oye! There was an issue with the Monthly YouTube Premium Reminder workflow. 😟
+            Workflow: `${{ github.workflow }}`
+            Run ID: `${{ github.run_id }}`
+            Status: `Failure` ❌
+            Please check the GitHub Actions logs for more details:
+            ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            Jaldi se dekh lo, kuch gadbad ho gayi lagta hai! 😱
 
