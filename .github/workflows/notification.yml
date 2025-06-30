@@ -1,9 +1,7 @@
 # -----------------------------------------------------------------------------
-# Monthly YouTube Premium Reminder Workflow (Professional Edition)
-# Purpose: To send automated, professional, and friendly reminders to YouTube
-# Premium family members. This advanced workflow is DRY (Don't Repeat Yourself),
-# using a single job for all payment reminders and managing members from an
-# external JSON file for easy updates.
+# Monthly YouTube Premium Reminder Workflow (V3 - with Manual Selection)
+# Purpose: To send automated, professional, and friendly reminders. Now with
+# the ability to select which specific reminder to send during a manual run.
 # -----------------------------------------------------------------------------
 
 name: Monthly YouTube Premium Reminder
@@ -11,38 +9,41 @@ name: Monthly YouTube Premium Reminder
 on:
   schedule:
     # 🗓️ Reminder Schedule (All times in IST - Indian Standard Time)
-    # Cron strings are in UTC. IST is UTC+5:30.
-    # Reminder 1: Early Heads-Up - 1st of month @ 10:30 AM IST (05:00 UTC)
     - cron: '0 5 1 * *'
-    # Reminder 2: Day Before Due - 4th of month @ 10:30 AM IST (05:00 UTC)
     - cron: '0 5 4 * *'
-    # Reminder 3: Due Date - 5th of month @ 10:30 AM IST (05:00 UTC)
     - cron: '0 5 5 * *'
-    # Reminder 4: Renewal Day - 8th of month @ 10:00 PM IST (16:30 UTC)
     - cron: '30 16 8 * *'
 
-  # Allows for manual triggering of the workflow.
+  # Manual trigger with input selection!
   workflow_dispatch:
-
-# -----------------------------------------------------------------------------
-# IMPORTANT: Configure these as GitHub Secrets in your repository settings!
-# - TELEGRAM_BOT_TOKEN: Your Telegram Bot's API Token
-# - TELEGRAM_TO: The Chat ID of your main Telegram group (e.g., -123456789)
-# - AMIT_CHAT_ID, ALAN_CHAT_ID, MOURYA_CHAT_ID, ABHISHEK_CHAT_ID, etc.
-# -----------------------------------------------------------------------------
+    inputs:
+      reminder_day:
+        description: 'Which reminder do you want to test?'
+        required: true
+        default: '1'
+        type: choice
+        options:
+          - '1' # Day 1 Reminder
+          - '4' # Day 4 Reminder
+          - '5' # Day 5 Reminder
+          - '8' # Renewal Confirmation
 
 jobs:
   # -----------------------------------------------------------------------------
   # JOB 1: Dynamic Payment Reminder (Handles 1st, 4th, 5th)
-  # This single job determines the correct reminder message based on the date.
   # -----------------------------------------------------------------------------
   send_payment_reminder:
-    # Runs only on the 1st, 4th, or 5th, or on a manual trigger.
+    # Runs if it's a scheduled payment day OR a manual run for a payment day
     if: |
-      github.event.schedule == '0 5 1 * *' ||
-      github.event.schedule == '0 5 4 * *' ||
-      github.event.schedule == '0 5 5 * *' ||
-      github.event_name == 'workflow_dispatch'
+      (github.event_name == 'schedule' && (
+        github.event.schedule == '0 5 1 * *' ||
+        github.event.schedule == '0 5 4 * *' ||
+        github.event.schedule == '0 5 5 * *'
+      )) || (github.event_name == 'workflow_dispatch' && (
+        github.event.inputs.reminder_day == '1' ||
+        github.event.inputs.reminder_day == '4' ||
+        github.event.inputs.reminder_day == '5'
+      ))
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository code
@@ -56,11 +57,11 @@ jobs:
         run: |
           echo "MONTH=$(date +'%B')" >> $GITHUB_ENV
           echo "YEAR=$(date +'%Y')" >> $GITHUB_ENV
-          # For manual triggers, default to the Day 1 message.
+          
+          # If run manually, use the user's input. Otherwise, use the schedule's date.
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            DAY_OF_MONTH="1"
+            DAY_OF_MONTH="${{ github.event.inputs.reminder_day }}"
           else
-            # For scheduled runs, parse the day from the cron schedule.
             DAY_OF_MONTH=$(date -d "${{ github.event.schedule }}" +%d)
           fi
           echo "REMINDER_DAY=$DAY_OF_MONTH" >> $GITHUB_ENV
@@ -69,10 +70,8 @@ jobs:
       - name: Prepare Reminder Messages
         id: prepare_messages
         run: |
-          # Dynamically builds the member list from the JSON file.
           MEMBER_LIST=$(jq -r 'to_entries | .[] | "<b>\(.key + 1).</b> \(.value.name)"' .github/workflows/members.json | sed 's/$/\\n/')
-
-          # Sets the appropriate message content based on the reminder day.
+          
           if [[ "${{ env.REMINDER_DAY }}" == "1" ]]; then
             GROUP_MSG="🔔 <b>YouTube Premium: Monthly Contribution Reminder</b> 🔔\n\nDear Team,\n\nThis is a friendly reminder regarding the monthly ₹50 contribution for our YouTube Premium family plan. The payment is due by <b>${{ env.MONTH }} 5, ${{ env.YEAR }}</b>, with the plan scheduled for renewal on <b>${{ env.MONTH }} 8</b>.\n\n<i>If you have already completed your payment, please disregard this message.</i> Your cooperation is greatly appreciated. 🙏\n\n<b>Current Members:</b>\n${MEMBER_LIST}\nThank you!"
             PM_MSG="Hello! This is a friendly reminder for your ₹50 contribution towards our shared YouTube Premium plan. The due date is **${{ env.MONTH }} 5**. If you've already paid, please feel free to ignore this. Thank you! 🙏"
@@ -83,7 +82,7 @@ jobs:
             GROUP_MSG="🚨 <b>Action Required: YouTube Premium Payment Due Today</b> 🚨\n\nDear Team,\n\nThis is a final reminder that today, <b>${{ env.MONTH }} 5, ${{ env.YEAR }}</b>, is the due date for the ₹50 contribution for our YouTube Premium plan. The renewal is scheduled for <b>${{ env.MONTH }} 8</b>.\n\nPlease submit your payment today to avoid any disruption in service. <i>If you have already paid, please disregard this message.</i> Your prompt attention is greatly appreciated. 🙏\n\n<b>Current Members:</b>\n${MEMBER_LIST}"
             PM_MSG="🚨 Final Reminder: Your ₹50 contribution for YouTube Premium is due today, **${{ env.MONTH }} 5**. Please complete the payment at your earliest convenience to prevent service interruption. Thank you for your promptness! 🙏"
           fi
-          # Use heredoc to handle multiline strings for GitHub Actions output
+          
           echo "group_message<<EOF" >> $GITHUB_OUTPUT
           echo -e "$GROUP_MSG" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
@@ -93,6 +92,7 @@ jobs:
 
       - name: Send Group Message & Capture ID
         id: send_group_message
+        # ... rest of the steps for sending group message, pinning, QR, and PMs are the same ...
         run: |
           GROUP_MESSAGE="${{ steps.prepare_messages.outputs.group_message }}"
           RESPONSE=$(curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
@@ -134,7 +134,6 @@ jobs:
             GREETING=$(echo "$member" | jq -r '.greeting')
             CHAT_ID_SECRET_NAME=$(echo "$member" | jq -r '.chat_id_secret')
             CHAT_ID=${!CHAT_ID_SECRET_NAME}
-            
             if [ -n "$CHAT_ID" ]; then
               echo "Sending PM to: $(echo "$member" | jq -r '.name')"
               FINAL_PM_MSG="${GREETING}\n\n${PM_MESSAGE}"
@@ -152,7 +151,8 @@ jobs:
   # -----------------------------------------------------------------------------
   send_renewal_confirmation:
     runs-on: ubuntu-latest
-    if: github.event.schedule == '30 16 8 * *'
+    # Runs if scheduled for the 8th OR manually triggered for the 8th
+    if: github.event.schedule == '30 16 8 * *' || (github.event_name == 'workflow_dispatch' && github.event.inputs.reminder_day == '8')
     steps:
       - name: Checkout repository code
         uses: actions/checkout@v4
@@ -173,12 +173,7 @@ jobs:
 
             This is to confirm that our YouTube Premium family plan has been successfully renewed for <b>${{ env.MONTH }}, ${{ env.YEAR }}</b>. ✨
 
-            You can continue to enjoy all premium features:
-            ✅ Ad-free videos
-            ✅ Background play
-            ✅ YouTube Music Premium
-
-            <i>As a final check, please ensure your ₹50 contribution for this month has been completed.</i> Thank you for your continued cooperation. Enjoy! 🥳
+            You can continue to enjoy all premium features. Thank you for your continued cooperation. Enjoy! 🥳
 
   # -----------------------------------------------------------------------------
   # JOB 3: Workflow Failure Notification
@@ -186,7 +181,7 @@ jobs:
   notify_on_failure:
     runs-on: ubuntu-latest
     needs: [send_payment_reminder, send_renewal_confirmation]
-    if: failure() # Runs if any of the preceding jobs fail.
+    if: failure()
     steps:
       - name: Send Failure Notification
         uses: appleboy/telegram-action@master
@@ -195,15 +190,7 @@ jobs:
           token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           message: |
             🚨 <b>Workflow Alert: YouTube Premium Reminder Failed</b> 🚨
-
             An error occurred in the Monthly YouTube Premium Reminder workflow.
-
-            <b>Workflow:</b> `${{ github.workflow }}`
-            <b>Run ID:</b> `${{ github.run_id }}`
-            <b>Status:</b> `Failure` ❌
-
             Please check the GitHub Actions logs for details:
             ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-
-            Manual review is required.
 
