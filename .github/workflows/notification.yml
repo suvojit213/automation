@@ -1,10 +1,9 @@
-# .github/workflows/telegram-reminder.yml
 # -----------------------------------------------------------------------------
-# Monthly YouTube Premium Reminder Workflow
-# Purpose: To send automated, professional, yet friendly reminders to YouTube
-# Premium family members about their monthly contribution and plan renewal.
-# Sends reminders to a group chat and as private messages (PMs) to individuals.
-# Includes automatic pinning of group reminder messages with notifications.
+# Monthly YouTube Premium Reminder Workflow (Professional Edition)
+# Purpose: To send automated, professional, and friendly reminders to YouTube
+# Premium family members. This advanced workflow is DRY (Don't Repeat Yourself),
+# using a single job for all payment reminders and managing members from an
+# external JSON file for easy updates.
 # -----------------------------------------------------------------------------
 
 name: Monthly YouTube Premium Reminder
@@ -12,416 +11,199 @@ name: Monthly YouTube Premium Reminder
 on:
   schedule:
     # 🗓️ Reminder Schedule (All times in IST - Indian Standard Time)
-    # Reminder 1: Early Heads-Up - Har mahine ki 1 tareekh ko subah 10:30 AM IST (05:00 UTC)
-    - cron: '0 5 1 * *' 
-    # Reminder 2: Day Before Due - Har mahine ki 4 tareekh ko subah 10:30 AM IST (05:00 UTC)
+    # Cron strings are in UTC. IST is UTC+5:30.
+    # Reminder 1: Early Heads-Up - 1st of month @ 10:30 AM IST (05:00 UTC)
+    - cron: '0 5 1 * *'
+    # Reminder 2: Day Before Due - 4th of month @ 10:30 AM IST (05:00 UTC)
     - cron: '0 5 4 * *'
-    # Reminder 3: Due Date - Har mahine ki 5 tareekh ko subah 10:30 AM IST (05:00 UTC)
+    # Reminder 3: Due Date - 5th of month @ 10:30 AM IST (05:00 UTC)
     - cron: '0 5 5 * *'
-    # Reminder 4: Renewal Day - Har mahine ki 8 tareekh ko raat 10:00 PM IST (16:30 UTC)
+    # Reminder 4: Renewal Day - 8th of month @ 10:00 PM IST (16:30 UTC)
     - cron: '30 16 8 * *'
-  
-  # Manually trigger karne ke liye
+
+  # Allows for manual triggering of the workflow.
   workflow_dispatch:
 
 # -----------------------------------------------------------------------------
 # IMPORTANT: Configure these as GitHub Secrets in your repository settings!
 # - TELEGRAM_BOT_TOKEN: Your Telegram Bot's API Token
 # - TELEGRAM_TO: The Chat ID of your main Telegram group (e.g., -123456789)
-# - AMIT_CHAT_ID: Amit's personal Telegram Chat ID (e.g., 123456789)
-# - ALAN_CHAT_ID: Alan D'Souza's personal Telegram Chat ID
-# - MOURYA_CHAT_ID: Mourya Baruah's personal Telegram Chat ID
-# - ABHISHEK_CHAT_ID: Abhishek Kumar's personal Telegram Chat ID
-# - SLOT5_CHAT_ID: Your personal Telegram Chat ID for Slot 5
-# - SLOT6_CHAT_ID: Personal Telegram Chat ID for Slot 6 (if applicable)
+# - AMIT_CHAT_ID, ALAN_CHAT_ID, MOURYA_CHAT_ID, ABHISHEK_CHAT_ID, etc.
 # -----------------------------------------------------------------------------
 
-# -----------------------------------------------------------------------------
-# JOBS SECTION: Different notifications for different days
-# -----------------------------------------------------------------------------
 jobs:
-  # 📅 Job 1: Early Heads-Up (1st of the month) - Group + PMs + Loud Pinning
-  send_telegram_reminder_1st:
+  # -----------------------------------------------------------------------------
+  # JOB 1: Dynamic Payment Reminder (Handles 1st, 4th, 5th)
+  # This single job determines the correct reminder message based on the date.
+  # -----------------------------------------------------------------------------
+  send_payment_reminder:
+    # Runs only on the 1st, 4th, or 5th, or on a manual trigger.
+    if: |
+      github.event.schedule == '0 5 1 * *' ||
+      github.event.schedule == '0 5 4 * *' ||
+      github.event.schedule == '0 5 5 * *' ||
+      github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    if: github.event.schedule == '0 5 1 * *' || github.event_name == 'workflow_dispatch'
     steps:
-      - name: ⬇️ Check out repository code
+      - name: Checkout repository code
         uses: actions/checkout@v4
 
-      - name: 📦 Install JQ for JSON parsing
+      - name: Install JQ for JSON parsing
         run: sudo apt-get update && sudo apt-get install -y jq
 
-      - name: 🗓️ Get current month and year
+      - name: Get Current Date Details
         id: date
         run: |
           echo "MONTH=$(date +'%B')" >> $GITHUB_ENV
           echo "YEAR=$(date +'%Y')" >> $GITHUB_ENV
-          # Define member chat IDs from secrets for easy access
-          echo "AMIT_CHAT_ID=${{ secrets.AMIT_CHAT_ID }}" >> $GITHUB_ENV
-          echo "ALAN_CHAT_ID=${{ secrets.ALAN_CHAT_ID }}" >> $GITHUB_ENV
-          echo "MOURYA_CHAT_ID=${{ secrets.MOURYA_CHAT_ID }}" >> $GITHUB_ENV
-          echo "ABHISHEK_CHAT_ID=${{ secrets.ABHISHEK_CHAT_ID }}" >> $GITHUB_ENV
+          # For manual triggers, default to the Day 1 message.
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            DAY_OF_MONTH="1"
+          else
+            # For scheduled runs, parse the day from the cron schedule.
+            DAY_OF_MONTH=$(date -d "${{ github.event.schedule }}" +%d)
+          fi
+          echo "REMINDER_DAY=$DAY_OF_MONTH" >> $GITHUB_ENV
+          echo "Preparing reminder for Day: $DAY_OF_MONTH"
 
-      - name: ✉️ Send Early Reminder to Group & Capture ID
-        id: send_group_message_1
+      - name: Prepare Reminder Messages
+        id: prepare_messages
         run: |
-          # Message content for group
-          GROUP_MESSAGE="🔔 <b>YouTube Premium: Monthly Contribution Reminder</b> 🔔
+          # Dynamically builds the member list from the JSON file.
+          MEMBER_LIST=$(jq -r 'to_entries | .[] | "<b>\(.key + 1).</b> \(.value.name)"' .github/workflows/members.json | sed 's/$/\\n/')
 
-          Dear Team,
+          # Sets the appropriate message content based on the reminder day.
+          if [[ "${{ env.REMINDER_DAY }}" == "1" ]]; then
+            GROUP_MSG="🔔 <b>YouTube Premium: Monthly Contribution Reminder</b> 🔔\n\nDear Team,\n\nThis is a friendly reminder regarding the monthly ₹50 contribution for our YouTube Premium family plan. The payment is due by <b>${{ env.MONTH }} 5, ${{ env.YEAR }}</b>, with the plan scheduled for renewal on <b>${{ env.MONTH }} 8</b>.\n\n<i>If you have already completed your payment, please disregard this message.</i> Your cooperation is greatly appreciated. 🙏\n\n<b>Current Members:</b>\n${MEMBER_LIST}\nThank you!"
+            PM_MSG="Hello! This is a friendly reminder for your ₹50 contribution towards our shared YouTube Premium plan. The due date is **${{ env.MONTH }} 5**. If you've already paid, please feel free to ignore this. Thank you! 🙏"
+          elif [[ "${{ env.REMINDER_DAY }}" == "4" ]]; then
+            GROUP_MSG="⚠️ <b>YouTube Premium: Payment Due Tomorrow</b> ⚠️\n\nHello Team,\n\nThis is a gentle reminder that the ₹50 contribution for YouTube Premium is due tomorrow, <b>${{ env.MONTH }} 5, ${{ env.YEAR }}</b>. The plan will renew on the 8th.\n\nTo ensure uninterrupted service, please complete your payment at your earliest convenience. <i>If you've already paid, kindly disregard this notice.</i> Thank you! 🙏\n\n<b>Current Members:</b>\n${MEMBER_LIST}"
+            PM_MSG="Hi there, just a quick reminder that the ₹50 YouTube Premium contribution is due tomorrow, **${{ env.MONTH }} 5**. Please ensure the payment is made to keep the service active. Thanks so much! 🙏"
+          elif [[ "${{ env.REMINDER_DAY }}" == "5" ]]; then
+            GROUP_MSG="🚨 <b>Action Required: YouTube Premium Payment Due Today</b> 🚨\n\nDear Team,\n\nThis is a final reminder that today, <b>${{ env.MONTH }} 5, ${{ env.YEAR }}</b>, is the due date for the ₹50 contribution for our YouTube Premium plan. The renewal is scheduled for <b>${{ env.MONTH }} 8</b>.\n\nPlease submit your payment today to avoid any disruption in service. <i>If you have already paid, please disregard this message.</i> Your prompt attention is greatly appreciated. 🙏\n\n<b>Current Members:</b>\n${MEMBER_LIST}"
+            PM_MSG="🚨 Final Reminder: Your ₹50 contribution for YouTube Premium is due today, **${{ env.MONTH }} 5**. Please complete the payment at your earliest convenience to prevent service interruption. Thank you for your promptness! 🙏"
+          fi
+          # Use heredoc to handle multiline strings for GitHub Actions output
+          echo "group_message<<EOF" >> $GITHUB_OUTPUT
+          echo -e "$GROUP_MSG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          echo "pm_message<<EOF" >> $GITHUB_OUTPUT
+          echo -e "$PM_MSG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
 
-          This is a friendly heads-up regarding your upcoming ₹50 contribution for the YouTube Premium family plan. The payment is due by ${{ env.MONTH }} 5, ${{ env.YEAR }}, with renewal on <b>${{ env.MONTH }} 8, ${{ env.YEAR }}</b>.
-
-          <i>Please ignore this message if you have already made your payment.</i> Your cooperation is much appreciated! 🙏
-
-          <b>Current Members:</b>
-          1. Amit
-          2. Alan D'Souza
-          3. Mourya Baruah
-          4. Abhishek Kumar
-          5. Slot 5 – Managed by Me
-          6. Slot 6 – Managed by Me
-
-          Happy streaming! 📺🎶"
-
+      - name: Send Group Message & Capture ID
+        id: send_group_message
+        run: |
+          GROUP_MESSAGE="${{ steps.prepare_messages.outputs.group_message }}"
           RESPONSE=$(curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
-            -d "chat_id=${{ secrets.TELEGRAM_TO }}" \
-            -d "text=${GROUP_MESSAGE}" \
-            -d "parse_mode=HTML" # Using HTML for consistent rendering
-          )
-          
-          MESSAGE_ID=$(echo "$RESPONSE" | jq -r '.result.message_id')
-          echo "::set-output name=message_id::$MESSAGE_ID"
-          echo "Sent group message with ID: $MESSAGE_ID" # For debugging
-
-      - name: 📌 Pin the Early Reminder Message (LOUD) in Group
-        if: steps.send_group_message_1.outputs.message_id != '' # Only try to pin if message was sent successfully
-        run: |
-          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/pinChatMessage" \
-            -d "chat_id=${{ secrets.TELEGRAM_TO }}" \
-            -d "message_id=${{ steps.send_group_message_1.outputs.message_id }}" \
-            # Removed disable_notification=true for loud pinning
-        env:
-          MESSAGE_ID: ${{ steps.send_group_message_1.outputs.message_id }}
-
-      - name: 📸 Send QR Code for Payment (1st)
-        uses: appleboy/telegram-action@master
-        with:
-          to: ${{ secrets.TELEGRAM_TO }}
-          token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          photo: ./.github/workflows/QRcode.png
-          message: |
-            Here's the QR code for your convenience: 💳
-
-      - name: ✉️ Send Early Reminder as PMs to All Members
-        run: |
-          # Message content for PMs (slightly personalized)
-          PM_MESSAGE="🔔 Hey there! Just a friendly reminder for your YouTube Premium contribution.
-
-          Your ₹50 payment is due by ${{ env.MONTH }} 5, ${{ env.YEAR }}. The plan renews on ${{ env.MONTH }} 8, ${{ env.YEAR }}.
-
-          Please ignore if you've already paid. Thanks for your support! 🙏
-          "
-          # List of member chat IDs to send PMs to
-          MEMBER_CHATS=("${{ env.AMIT_CHAT_ID }}" "${{ env.ALAN_CHAT_ID }}" "${{ env.MOURYA_CHAT_ID }}" "${{ env.ABHISHEK_CHAT_ID }}")
-
-          for CHAT_ID in "${MEMBER_CHATS[@]}"; do
-            if [ -n "$CHAT_ID" ]; then # Check if chat ID is not empty
-              echo "Sending PM to: $CHAT_ID"
-              curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
-                -d "chat_id=$CHAT_ID" \
-                -d "text=${PM_MESSAGE}" \
-                -d "parse_mode=HTML" > /dev/null # Suppress output for multiple PMs
-            else
-              echo "Skipping empty chat ID."
-            fi
-          done
-
-  # 🗓️ Job 2: Day Before Due Date (4th of the month) - Group + PMs + Loud Pinning
-  send_telegram_reminder_4th:
-    runs-on: ubuntu-latest
-    if: github.event.schedule == '0 5 4 * *' || github.event_name == 'workflow_dispatch'
-    steps:
-      - name: ⬇️ Check out repository code
-        uses: actions/checkout@v4
-
-      - name: 📦 Install JQ for JSON parsing
-        run: sudo apt-get update && sudo apt-get install -y jq
-
-      - name: 🗓️ Get current month and year
-        id: date
-        run: |
-          echo "MONTH=$(date +'%B')" >> $GITHUB_ENV
-          echo "YEAR=$(date +'%Y')" >> $GITHUB_ENV
-          echo "AMIT_CHAT_ID=${{ secrets.AMIT_CHAT_ID }}" >> $GITHUB_ENV
-          echo "ALAN_CHAT_ID=${{ secrets.ALAN_CHAT_ID }}" >> $GITHUB_ENV
-          echo "MOURYA_CHAT_ID=${{ secrets.MOURYA_CHAT_ID }}" >> $GITHUB_ENV
-          echo "ABHISHEK_CHAT_ID=${{ secrets.ABHISHEK_CHAT_ID }}" >> $GITHUB_ENV
-          
-
-      - name: ✉️ Send Day Before Due Reminder to Group & Capture ID
-        id: send_group_message_4
-        run: |
-          # Message content for group
-          GROUP_MESSAGE="⚠️ <b>YouTube Premium: Payment Due Tomorrow!</b> ⚠️
-
-          Hello everyone,
-
-          Just a gentle reminder: your ₹50 contribution for YouTube Premium is due <b>tomorrow, ${{ env.MONTH }} 5, ${{ env.YEAR }}</b>. The plan will renew on <b>${{ env.MONTH }} 8, ${{ env.YEAR }}</b>.
-
-          Please ensure your payment is made soon to enjoy uninterrupted service! 🏃‍♂️
-          <i>Kindly disregard this message if you have already submitted your payment.</i> Thank you! 🙏
-
-          <b>Current Members:</b>
-          1. Amit
-          2. Alan D'Souza
-          3. Mourya Baruah
-          4. Abhishek Kumar
-          5. Slot 5 – Managed by Me
-          6. Slot 6 – Managed by Me"
-
-          RESPONSE=$(curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
-            -d "chat_id=${{ secrets.TELEGRAM_TO }}" \
-            -d "text=${GROUP_MESSAGE}" \
+            --data-urlencode "chat_id=${{ secrets.TELEGRAM_TO }}" \
+            --data-urlencode "text=${GROUP_MESSAGE}" \
             -d "parse_mode=HTML"
           )
-          
           MESSAGE_ID=$(echo "$RESPONSE" | jq -r '.result.message_id')
-          echo "::set-output name=message_id::$MESSAGE_ID"
+          echo "message_id=$MESSAGE_ID" >> $GITHUB_OUTPUT
           echo "Sent group message with ID: $MESSAGE_ID"
 
-      - name: 📌 Pin the Day Before Due Reminder Message (LOUD) in Group
-        if: steps.send_group_message_4.outputs.message_id != ''
+      - name: Pin Group Message with Notification
+        if: steps.send_group_message.outputs.message_id
         run: |
           curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/pinChatMessage" \
             -d "chat_id=${{ secrets.TELEGRAM_TO }}" \
-            -d "message_id=${{ steps.send_group_message_4.outputs.message_id }}" \
-            # Removed disable_notification=true for loud pinning
-        env:
-          MESSAGE_ID: ${{ steps.send_group_message_4.outputs.message_id }}
+            -d "message_id=${{ steps.send_group_message.outputs.message_id }}" \
+            -d "disable_notification=false"
 
-      - name: 📸 Send QR Code for Payment (4th)
+      - name: Send QR Code for Payment
         uses: appleboy/telegram-action@master
         with:
           to: ${{ secrets.TELEGRAM_TO }}
           token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           photo: ./.github/workflows/QRcode.png
           message: |
-            Here's the QR code for your convenience: 💳
+            For your convenience, here is the QR code for payment: 💳
 
-      - name: ✉️ Send Day Before Due Reminder as PMs to All Members
-        run: |
-          PM_MESSAGE="⚠️ Hey! Just a gentle reminder for your YouTube Premium contribution.
-
-          Your ₹50 payment is due tomorrow, ${{ env.MONTH }} 5, ${{ env.YEAR }}. The plan renews on ${{ env.MONTH }} 8, ${{ env.YEAR }}.
-
-          Please ensure payment is made soon! Thanks! 🙏
-          "
-          MEMBER_CHATS=("${{ env.AMIT_CHAT_ID }}" "${{ env.ALAN_CHAT_ID }}" "${{ env.MOURYA_CHAT_ID }}" "${{ env.ABHISHEK_CHAT_ID}}")
-
-          for CHAT_ID in "${MEMBER_CHATS[@]}"; do
-            if [ -n "$CHAT_ID" ]; then
-              echo "Sending PM to: $CHAT_ID"
-              curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
-                -d "chat_id=$CHAT_ID" \
-                -d "text=${PM_MESSAGE}" \
-                -d "parse_mode=HTML" > /dev/null
-            else
-              echo "Skipping empty chat ID."
-            fi
-          done
-
-  # 🗓️ Job 3: DUE DATE! (5th of the month) - Group + PMs + Loud Pinning
-  send_telegram_reminder_5th:
-    runs-on: ubuntu-latest
-    if: github.event.schedule == '0 5 5 * *' || github.event_name == 'workflow_dispatch'
-    steps:
-      - name: ⬇️ Check out repository code
-        uses: actions/checkout@v4
-
-      - name: 📦 Install JQ for JSON parsing
-        run: sudo apt-get update && sudo apt-get install -y jq
-
-      - name: 🗓️ Get current month and year
-        id: date
-        run: |
-          echo "MONTH=$(date +'%B')" >> $GITHUB_ENV
-          echo "YEAR=$(date +'%Y')" >> $GITHUB_ENV
-          echo "AMIT_CHAT_ID=${{ secrets.AMIT_CHAT_ID }}" >> $GITHUB_ENV
-          echo "ALAN_CHAT_ID=${{ secrets.ALAN_CHAT_ID }}" >> $GITHUB_ENV
-          echo "MOURYA_CHAT_ID=${{ secrets.MOURYA_CHAT_ID }}" >> $GITHUB_ENV
-          echo "ABHISHEK_CHAT_ID=${{ secrets.ABHISHEK_CHAT_ID }}" >> $GITHUB_ENV
-
-      - name: ✉️ Send Due Date Reminder to Group & Capture ID
-        id: send_group_message_5
-        run: |
-          # Message content for group
-          GROUP_MESSAGE="🚨 <b>ACTION REQUIRED: YouTube Premium Payment Due TODAY!</b> 🚨
-
-          Dear Team,
-
-          This is an urgent reminder that today, <b>${{ env.MONTH }} 5, ${{ env.YEAR }}</b>, is the <i>final day</i> to make your <b>₹50 contribution</b> for YouTube Premium. The plan renews on <b>${{ env.MONTH }} 8, ${{ env.YEAR }}</b>.
-
-          Please make your payment <b>immediately</b> to avoid any service disruption! 🛑
-          <i>Kindly disregard this message if you have already submitted your payment.</i> Your promptness is highly appreciated! 🙏
-
-          <b>Current Members:</b>
-          1. Amit
-          2. Alan D'Souza
-          3. Mourya Baruah
-          4. Abhishek Kumar
-          5. Slot 5 – Managed by Me
-          6. Slot 6 – Managed by Me"
-
-          RESPONSE=$(curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
-            -d "chat_id=${{ secrets.TELEGRAM_TO }}" \
-            -d "text=${GROUP_MESSAGE}" \
-            -d "parse_mode=HTML"
-          )
-          
-          MESSAGE_ID=$(echo "$RESPONSE" | jq -r '.result.message_id')
-          echo "::set-output name=message_id::$MESSAGE_ID"
-          echo "Sent group message with ID: $MESSAGE_ID"
-
-      - name: 📌 Pin the Due Date Reminder Message (LOUD) in Group
-        if: steps.send_group_message_5.outputs.message_id != ''
-        run: |
-          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/pinChatMessage" \
-            -d "chat_id=${{ secrets.TELEGRAM_TO }}" \
-            -d "message_id=${{ steps.send_message_5.outputs.message_id }}" \
-            # Removed disable_notification=true for loud pinning
+      - name: Send Personal Reminders (PM) to Members
         env:
-          MESSAGE_ID: ${{ steps.send_message_5.outputs.message_id }}
-
-      - name: 📸 Send QR Code for Payment (5th)
-        uses: appleboy/telegram-action@master
-        with:
-          to: ${{ secrets.TELEGRAM_TO }}
-          token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          photo: ./.github/workflows/QRcode.png
-          message: |
-            Here's the QR code for immediate payment: 💳
-
-      - name: ✉️ Send Due Date Reminder as PMs to All Members
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          AMIT_CHAT_ID: ${{ secrets.AMIT_CHAT_ID }}
+          ALAN_CHAT_ID: ${{ secrets.ALAN_CHAT_ID }}
+          MOURYA_CHAT_ID: ${{ secrets.MOURYA_CHAT_ID }}
+          ABHISHEK_CHAT_ID: ${{ secrets.ABHISHEK_CHAT_ID }}
         run: |
-          PM_MESSAGE="🚨 ACTION REQUIRED: Your YouTube Premium payment is due TODAY! 🚨
-
-          Please pay ₹50 immediately to avoid service disruption. Plan renews ${{ env.MONTH }} 8, ${{ env.YEAR }}.
-
-          Ignore if already paid. Your promptness is appreciated! 🙏
-          "
-          MEMBER_CHATS=("${{ env.AMIT_CHAT_ID }}" "${{ env.ALAN_CHAT_ID }}" "${{ env.MOURYA_CHAT_ID }}" "${{ env.ABHISHEK_CHAT_ID }}")
-
-          for CHAT_ID in "${MEMBER_CHATS[@]}"; do
+          PM_MESSAGE="${{ steps.prepare_messages.outputs.pm_message }}"
+          jq -c '.[]' .github/workflows/members.json | while read -r member; do
+            GREETING=$(echo "$member" | jq -r '.greeting')
+            CHAT_ID_SECRET_NAME=$(echo "$member" | jq -r '.chat_id_secret')
+            CHAT_ID=${!CHAT_ID_SECRET_NAME}
+            
             if [ -n "$CHAT_ID" ]; then
-              echo "Sending PM to: $CHAT_ID"
-              curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
-                -d "chat_id=$CHAT_ID" \
-                -d "text=${PM_MESSAGE}" \
-                -d "parse_mode=HTML" > /dev/null
+              echo "Sending PM to: $(echo "$member" | jq -r '.name')"
+              FINAL_PM_MSG="${GREETING}\n\n${PM_MESSAGE}"
+              curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+                --data-urlencode "chat_id=${CHAT_ID}" \
+                --data-urlencode "text=${FINAL_PM_MSG}" \
+                -d "parse_mode=Markdown" > /dev/null
             else
-              echo "Skipping empty chat ID."
+              echo "Skipping member with empty chat ID: $(echo "$member" | jq -r '.name')"
             fi
           done
 
-  # 🗓️ Job 4: Renewal Confirmation (8th of the month - Night) - Group + PMs (No Pinning)
-  send_telegram_reminder_8th:
+  # -----------------------------------------------------------------------------
+  # JOB 2: Renewal Confirmation (8th of the month)
+  # -----------------------------------------------------------------------------
+  send_renewal_confirmation:
     runs-on: ubuntu-latest
-    if: github.event.schedule == '30 16 8 * *' || github.event_name == 'workflow_dispatch'
+    if: github.event.schedule == '30 16 8 * *'
     steps:
-      - name: ⬇️ Check out repository code
+      - name: Checkout repository code
         uses: actions/checkout@v4
-
-      - name: 📦 Install JQ for JSON parsing
-        run: sudo apt-get update && sudo apt-get install -y jq
-
-      - name: 🗓️ Get current month and year
-        id: date
+      - name: Get Current Month and Year
         run: |
           echo "MONTH=$(date +'%B')" >> $GITHUB_ENV
           echo "YEAR=$(date +'%Y')" >> $GITHUB_ENV
-          echo "AMIT_CHAT_ID=${{ secrets.AMIT_CHAT_ID }}" >> $GITHUB_ENV
-          echo "ALAN_CHAT_ID=${{ secrets.ALAN_CHAT_ID }}" >> $GITHUB_ENV
-          echo "MOURYA_CHAT_ID=${{ secrets.MOURYA_CHAT_ID }}" >> $GITHUB_ENV
-          echo "ABHISHEK_CHAT_ID=${{ secrets.ABHISHEK_CHAT_ID }}" >> $GITHUB_ENV
-
-      - name: ✉️ Send Renewal Confirmation to Group
+      - name: Send Renewal Confirmation to Group
         uses: appleboy/telegram-action@master
         with:
           to: ${{ secrets.TELEGRAM_TO }}
           token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          parse_mode: html # Using HTML for consistent rendering
+          parse_mode: html
           message: |
-            🎉 <b>YouTube Premium: Renewal Successful</b>! 🎉
+            🎉 <b>YouTube Premium: Plan Renewed Successfully</b> 🎉
+
             Dear Team,
 
-            Great news! Your YouTube Premium family plan has been <b>successfully renewed</b> for <b> ${{ env.MONTH }}, ${{ env.YEAR }}</b>! ✨
+            This is to confirm that our YouTube Premium family plan has been successfully renewed for <b>${{ env.MONTH }}, ${{ env.YEAR }}</b>. ✨
 
             You can continue to enjoy all premium features:
-            ✅ Ad-free videos 🚫
-            ✅ Background play 🎧
-            ✅ YouTube Music Premium 🎶
+            ✅ Ad-free videos
+            ✅ Background play
+            ✅ YouTube Music Premium
 
-            <i>Just a quick note: Please ensure your ₹50 contribution for this month has been completed. If not, kindly do so at your earliest convenience.</i> 🙏
+            <i>As a final check, please ensure your ₹50 contribution for this month has been completed.</i> Thank you for your continued cooperation. Enjoy! 🥳
 
-            <b>Current Members</b> :
-            1. Amit
-            2. Alan D'Souza
-            3. Mourya Baruah
-            4. Abhishek Kumar
-            5. Slot 5 – Managed by Me
-            6. Slot 6 – Managed by Me
-
-            <br>Thank you for your timely contributions! Enjoy</br> 🥳
-
-      - name: ✉️ Send Renewal Confirmation as PMs to All Members
-        run: |
-          PM_MESSAGE="🎉 Great news! Your YouTube Premium plan has been successfully renewed for ${{ env.MONTH }}, ${{ env.YEAR }}!
-
-          Enjoy: ✅ Ad-free videos 🚫 ✅ Background play 🎧 ✅ YouTube Music Premium 🎶
-
-          Just a quick note: Please ensure your ₹50 contribution is completed. 🙏
-          "
-          MEMBER_CHATS=("${{ env.AMIT_CHAT_ID }}" "${{ env.ALAN_CHAT_ID }}" "${{ env.MOURYA_CHAT_ID }}" "${{ env.ABHISHEK_CHAT_ID }}")
-
-          for CHAT_ID in "${MEMBER_CHATS[@]}"; do
-            if [ -n "$CHAT_ID" ]; then
-              echo "Sending PM to: $CHAT_ID"
-              curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
-                -d "chat_id=$CHAT_ID" \
-                -d "text=${PM_MESSAGE}" \
-                -d "parse_mode=HTML" > /dev/null
-            else
-              echo "Skipping empty chat ID."
-            fi
-          done
-
-  # ❌ Job 5: Workflow Failure Notification
-  # This job runs only if any previous job in the workflow fails.
+  # -----------------------------------------------------------------------------
+  # JOB 3: Workflow Failure Notification
+  # -----------------------------------------------------------------------------
   notify_on_failure:
     runs-on: ubuntu-latest
-    needs: 
-      - send_telegram_reminder_1st
-      - send_telegram_reminder_4th
-      - send_telegram_reminder_5th
-      - send_telegram_reminder_8th
-    if: always() && (needs.send_telegram_reminder_1st.result == 'failure' || needs.send_telegram_reminder_4th.result == 'failure' || needs.send_telegram_reminder_5th.result == 'failure' || needs.send_telegram_reminder_8th.result == 'failure')
+    needs: [send_payment_reminder, send_renewal_confirmation]
+    if: failure() # Runs if any of the preceding jobs fail.
     steps:
-      - name: ⬇️ Check out repository code
-        uses: actions/checkout@v4
-
-      - name: 🚨 Send Failure Notification to Telegram
+      - name: Send Failure Notification
         uses: appleboy/telegram-action@master
         with:
           to: ${{ secrets.TELEGRAM_TO }}
           token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           message: |
-            🚨 Workflow Alert: YouTube Premium Reminder Failed! 🚨
-            Oye! There was an issue with the Monthly YouTube Premium Reminder workflow. 😟
-            Workflow: `${{ github.workflow }}`
-            Run ID: `${{ github.run_id }}`
-            Status: `Failure` ❌
-            Please check the GitHub Actions logs for more details:
+            🚨 <b>Workflow Alert: YouTube Premium Reminder Failed</b> 🚨
+
+            An error occurred in the Monthly YouTube Premium Reminder workflow.
+
+            <b>Workflow:</b> `${{ github.workflow }}`
+            <b>Run ID:</b> `${{ github.run_id }}`
+            <b>Status:</b> `Failure` ❌
+
+            Please check the GitHub Actions logs for details:
             ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-            Jaldi se dekh lo, kuch gadbad ho gayi lagta hai! 😱
+
+            Manual review is required.
 

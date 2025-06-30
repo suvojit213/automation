@@ -1,0 +1,23 @@
+[
+  {
+    "name": "Amit",
+    "chat_id_secret": "AMIT_CHAT_ID",
+    "greeting": "Hello Amit,"
+  },
+  {
+    "name": "Alan D'Souza",
+    "chat_id_secret": "ALAN_CHAT_ID",
+    "greeting": "Hello Alan,"
+  },
+  {
+    "name": "Mourya Baruah",
+    "chat_id_secret": "MOURYA_CHAT_ID",
+    "greeting": "Hello Mourya,"
+  },
+  {
+    "name": "Abhishek Kumar",
+    "chat_id_secret": "ABHISHEK_CHAT_ID",
+    "greeting": "Hello Abhishek,"
+  }
+]
+
