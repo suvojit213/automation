@@ -18,6 +18,10 @@
     "name": "Abhishek Kumar",
     "chat_id_secret": "ABHISHEK_CHAT_ID",
     "greeting": "Hello Abhishek,"
+  },
+  {
+    "name": "Mouma Sengupta",
+    "chat_id_secret": "MOUMA_CHAT_ID",
+    "greeting": "Hello Di bhai,"
   }
 ]
-
