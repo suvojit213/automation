@@ -23,5 +23,10 @@
     "name": "Mouma Sengupta",
     "chat_id_secret": "MOUMA_CHAT_ID",
     "greeting": "Hello Di bhai,"
+  },
+  {
+    "name": "Suvojeet Sengupte (ME)",
+    "chat_id_secret": "SUVOJEET_CHAT_ID",
+    "greeting": "Hello Suvo,"
   }
 ]

@@ -129,6 +129,8 @@ jobs:
           MOURYA_CHAT_ID: ${{ secrets.MOURYA_CHAT_ID }}
           ABHISHEK_CHAT_ID: ${{ secrets.ABHISHEK_CHAT_ID }}
           MOUMA_CHAT_ID: ${{ secrets.MOUMA_CHAT_ID }}
+          SUVOJEET_CHAT_ID: ${{ secrets.SUVOJEET_CHAT_ID }}
+
         run: |
           PM_MESSAGE="${{ steps.prepare_messages.outputs.pm_message }}"
           jq -c '.[]' .github/workflows/members.json | while read -r member; do
