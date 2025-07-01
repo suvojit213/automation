@@ -9,10 +9,10 @@ name: Monthly YouTube Premium Reminder
 on:
   schedule:
     # 🗓️ Reminder Schedule (All times in IST - Indian Standard Time)
-    - cron: '0 5 1 * *'
-    - cron: '0 5 4 * *'
-    - cron: '0 5 5 * *'
-    - cron: '30 16 8 * *'
+    - cron: '30 19 1 * *' # 1 AM IST on day 1
+    - cron: '30 22 4 * *' # 4 AM IST on day 4
+    - cron: '30 23 5 * *' # 5 AM IST on day 5
+    - cron: '30 2 8 * *'  # 8 AM IST on day 8
 
   # Manual trigger with input selection!
   workflow_dispatch:
@@ -36,9 +36,9 @@ jobs:
     # Runs if it's a scheduled payment day OR a manual run for a payment day
     if: |
       (github.event_name == 'schedule' && (
-        github.event.schedule == '0 5 1 * *' ||
-        github.event.schedule == '0 5 4 * *' ||
-        github.event.schedule == '0 5 5 * *'
+        github.event.schedule == '30 19 1 * *' ||
+        github.event.schedule == '30 22 4 * *' ||
+        github.event.schedule == '30 23 5 * *'
       )) || (github.event_name == 'workflow_dispatch' && (
         github.event.inputs.reminder_day == '1' ||
         github.event.inputs.reminder_day == '4' ||
@@ -155,7 +155,7 @@ jobs:
   send_renewal_confirmation:
     runs-on: ubuntu-latest
     # Runs if scheduled for the 8th OR manually triggered for the 8th
-    if: github.event.schedule == '30 16 8 * *' || (github.event_name == 'workflow_dispatch' && github.event.inputs.reminder_day == '8')
+    if: github.event.schedule == '30 2 8 * *' || (github.event_name == 'workflow_dispatch' && github.event.inputs.reminder_day == '8')
     steps:
       - name: Checkout repository code
         uses: actions/checkout@v4
