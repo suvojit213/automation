@@ -12,7 +12,7 @@ on:
     - cron: '30 4 1 * *' # 10 AM IST on day 1
     - cron: '30 4 4 * *' # 10 AM IST on day 4
     - cron: '30 4 5 * *' # 10 AM IST on day 5
-    - cron: '30 4 8 * *'  # 10 AM IST on day 8
+    - cron: '30 15 8 * *'  # 9 PM IST on day 8
 
   # Manual trigger with input selection!
   workflow_dispatch:
@@ -155,7 +155,7 @@ jobs:
   send_renewal_confirmation:
     runs-on: ubuntu-latest
     # Runs if scheduled for the 8th OR manually triggered for the 8th
-    if: github.event.schedule == '30 4 8 * *' || (github.event_name == 'workflow_dispatch' && github.event.inputs.reminder_day == '8')
+    if: github.event.schedule == '30 15 8 * *' || (github.event_name == 'workflow_dispatch' && github.event.inputs.reminder_day == '8')
     steps:
       - name: Checkout repository code
         uses: actions/checkout@v4
